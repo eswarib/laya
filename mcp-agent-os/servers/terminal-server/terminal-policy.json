@@ -1,0 +1,35 @@
+{
+  "sandboxRoot": ".",
+  "auditLogPath": ".mcp-audit/terminal-server.jsonl",
+  "allowedCommands": [
+    "ls",
+    "pwd",
+    "whoami",
+    "git",
+    "npm",
+    "node",
+    "python3",
+    "rg",
+    "cat"
+  ],
+  "blockedArgsRegex": [
+    "--no-preserve-root"
+  ],
+  "dangerousCommands": [
+    "rm",
+    "dd",
+    "mkfs",
+    "shutdown",
+    "reboot",
+    "poweroff"
+  ],
+  "dangerousPatterns": [
+    { "command": "git", "argsAnyOf": ["clean"], "argsRegexAnyOf": ["^-fdx$", "^-xdf$", "^--force$"] },
+    { "command": "git", "argsAnyOf": ["reset"], "argsRegexAnyOf": ["^--hard$"] }
+  ],
+  "confirmTtlSeconds": 90,
+  "maxOutputChars": 20000,
+  "maxFileReadBytes": 200000
+}
+
+
