@@ -4,8 +4,7 @@
   "main": "index.js",
   "type": "module",
   "bin": {
-    "laya": "./bin/laya.js",
-    "smartos": "./bin/smartos.js"
+    "laya": "./bin/laya.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

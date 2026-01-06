@@ -7,6 +7,7 @@ import {
   toolCancel,
   toolConfirm,
   toolDiff,
+  toolFindFiles,
   toolGenerateSshKey,
   toolReadFile,
   toolRun,
@@ -23,13 +24,33 @@ async function main() {
   });
 
   server.registerTool(
+    'find_files',
+    {
+      description:
+        'Find files by filename/extension in a directory (optionally follow symlinks). Returns absolute paths sorted by most-recently-modified.',
+      inputSchema: z.object({
+        dir: z.string().describe('Directory path (relative to sandbox root, or absolute within sandbox)'),
+        extensions: z.array(z.string()).optional().describe('Extensions like ["jpg","png"] or [".jpg",".png"]'),
+        nameContains: z.string().optional().describe('Case-insensitive substring filter on the filename'),
+        maxResults: z.number().int().positive().optional().describe('Max files to return (default 50)'),
+        modifiedWithinMinutes: z.number().int().positive().optional().describe('Only files modified within N minutes'),
+        followSymlinks: z.boolean().optional().describe('Follow symlinked directories (default true)')
+      })
+    },
+    async ({ dir, extensions, nameContains, maxResults, modifiedWithinMinutes, followSymlinks }) => {
+      const res = await toolFindFiles(ctx, { dir, extensions, nameContains, maxResults, modifiedWithinMinutes, followSymlinks });
+      return { content: [{ type: 'text', text: res.text }] };
+    }
+  );
+
+  server.registerTool(
     'generate_ssh_key',
     {
       description: 'Generate an SSH keypair under ~/.ssh (always requires double confirmation).',
       inputSchema: z.object({
         type: z.enum(['ed25519', 'rsa']).optional().describe('Key type (default: ed25519)'),
         filename: z.string().optional().describe('Key filename under ~/.ssh (default: id_ed25519)'),
-        comment: z.string().optional().describe('Key comment (default: smartos-mcp)'),
+        comment: z.string().optional().describe('Key comment (default: laya-mcp)'),
         passphrase: z.string().optional().describe('Passphrase (default: empty)'),
         overwrite: z.boolean().optional().describe('Overwrite existing key files (default: false)')
       })

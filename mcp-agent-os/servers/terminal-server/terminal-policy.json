@@ -1,5 +1,5 @@
 {
-  "sandboxRoot": ".",
+  "sandboxRoot": "/home/eswari",
   "auditLogPath": ".mcp-audit/terminal-server.jsonl",
   "allowedCommands": [
     "ls",
@@ -10,10 +10,19 @@
     "node",
     "python3",
     "rg",
-    "cat"
+    "cat",
+    "mkdir",
+    "ln",
+    "date",
+    "grep",
+    "egrep",
+    "find"
   ],
   "blockedArgsRegex": [
-    "--no-preserve-root"
+    "--no-preserve-root",
+    "^-rf$",
+    "^-fr$",
+    "^--force$"
   ],
   "dangerousCommands": [
     "rm",
@@ -25,7 +34,8 @@
   ],
   "dangerousPatterns": [
     { "command": "git", "argsAnyOf": ["clean"], "argsRegexAnyOf": ["^-fdx$", "^-xdf$", "^--force$"] },
-    { "command": "git", "argsAnyOf": ["reset"], "argsRegexAnyOf": ["^--hard$"] }
+    { "command": "git", "argsAnyOf": ["reset"], "argsRegexAnyOf": ["^--hard$"] },
+    { "command": "ln", "argsAnyOf": ["-f", "--force"] }
   ],
   "confirmTtlSeconds": 90,
   "maxOutputChars": 20000,

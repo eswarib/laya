@@ -4,6 +4,7 @@ import { ollamaChat, type OllamaMessage } from './ollama.js';
 export type ChatbotConfig = {
   ollamaHost: string;
   ollamaModel: string;
+  ollamaTimeoutMs?: number;
   maxToolStepsPerUserTurn?: number;
 };
 
@@ -143,8 +144,8 @@ function summarizeInputSchema(schema: unknown): string | null {
 function buildSystemPrompt(servers: ConnectedServer[]): string {
   return [
     'You are SmartOS, a local agent running on a developer machine.',
-    'You can use MCP tools from connected servers to read files, run safe commands, and more.',
-    '',
+    'You can use MCP tools from connected servers to read files, search files,run safe commands, and more.',
+    'You can use the search tool to search for files and directories.',
     'CRITICAL: You must respond with ONLY a single JSON object, no extra text.',
     '',
     'Choose exactly one of these action shapes:',
@@ -163,13 +164,25 @@ function buildSystemPrompt(servers: ConnectedServer[]): string {
     '- After you receive a tool result, either call ONE additional tool if necessary or respond with {"type":"final",...}.',
     '- Do NOT repeat the same tool call with the same args. If a tool fails or is not implemented, respond with a final explanation.',
     '- Never call terminal-server.confirm automatically. If a tool returns a confirmation token, ask the user to run /confirm <token>.',
+    '- Never invent tool names. Only use tools listed under "Available tools".',
+    '- If you cannot find a suitable tool OR the available tools are blocked by policy, respond with {"type":"final",...} and include:',
+    '  - a short explanation',
+    '  - the exact terminal command(s) the user can run manually in their own shell (clearly labeled as "Run manually:")',
+    '- When suggesting "Run manually" commands: prefer safe/non-destructive commands; include a safer alternative if available; and add a clear warning before any destructive or irreversible commands.',
+    '- For file discovery (e.g. "find my downloads", "find images", "find recent files"), prefer terminal-server.find_files. Do NOT use terminal-server.search unless you truly need to search file contents.',
+    '- For terminal-server.find_files, prefer relative directories like "Downloads" (relative to sandbox root). Avoid paths like "/Downloads" which are usually outside the sandbox.',
+    '- IMPORTANT: If the user asks you to LIST files (e.g. "list the 5 newest files in Downloads"), you MUST call terminal-server.find_files. Do not answer from memory.',
+    '- Example (recent files; extensions is optional): {"type":"tool","server":"terminal-server","tool":"find_files","args":{"dir":".","maxResults":10}}',
+    '- Example (Downloads): {"type":"tool","server":"terminal-server","tool":"find_files","args":{"dir":"Downloads","maxResults":5}}',
+    '- IMPORTANT: If the user asks for current system facts like date/time, you MUST call terminal-server.run with an allowlisted command (e.g. "date"). Do not invent files like /etc/mktime.',
+    '- Example (date): {"type":"tool","server":"terminal-server","tool":"run","args":{"command":"date"}}',
     '',
     'SSH KEY WIZARD (important):',
     '- If the user asks to "create an ssh key" but did not provide details, DO NOT call generate_ssh_key yet.',
     '- Instead, ask the user to choose options and state the defaults:',
     '  - type: default "ed25519" (offer "rsa")',
     '  - filename under ~/.ssh: default "id_ed25519"',
-    '  - comment: optional (default "smartos-mcp")',
+    '  - comment: optional (default "laya-mcp")',
     '  - passphrase: optional (default empty)',
     '  - overwrite: default false',
     '- Only call terminal-server.generate_ssh_key after the user answers the options (or explicitly says "use defaults").',
@@ -217,7 +230,7 @@ export function createChatbot(servers: ConnectedServer[], cfg: ChatbotConfig) {
       'I can generate an SSH key, but first choose options (or say "use defaults"):',
       '- type: default ed25519 (or rsa)',
       '- filename under ~/.ssh: default id_ed25519',
-      '- comment (optional): default smartos-mcp',
+      '- comment (optional): default laya-mcp',
       '- passphrase (optional): default empty',
       '- overwrite existing key files? default no',
       '',
@@ -308,6 +321,7 @@ export function createChatbot(servers: ConnectedServer[], cfg: ChatbotConfig) {
       host: cfg.ollamaHost,
       model: cfg.ollamaModel,
       messages: msgs,
+      timeoutMs: cfg.ollamaTimeoutMs,
       temperature: 0.2,
       numPredict: 300
     });
@@ -452,6 +466,19 @@ export function createChatbot(servers: ConnectedServer[], cfg: ChatbotConfig) {
           const resp = await server.client.callTool({ name: toolName, arguments: args });
           const text = extractToolText(resp);
           history.push({ role: 'tool', content: `${serverName}.${toolName}(${JSON.stringify(args)}):\n${text}` });
+
+          // For file listing/discovery tools, the tool output is the answer. Return it directly so
+          // the user sees actual filenames/paths (and we don't rely on the model to restate it).
+          if (serverName === 'terminal-server' && toolName === 'find_files') {
+            return text;
+          }
+
+          // For simple system fact queries (like date/time), return the command output directly.
+          // This avoids a common failure mode where the model "acknowledges" the action but forgets to print results.
+          if (serverName === 'terminal-server' && toolName === 'run') {
+            const cmd = typeof (args as any)?.command === 'string' ? String((args as any).command) : '';
+            if (cmd === 'date') return text;
+          }
 
           const conf = extractConfirmation(resp);
           if (conf) {

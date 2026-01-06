@@ -15,6 +15,21 @@ From `mcp-agent-os/`:
 ./dev.sh
 ```
 
+## Configuration (config.json)
+
+You can configure Laya via `config.json` (recommended) instead of environment variables.
+
+- Lookup order:
+  - `LAYA_CONFIG_PATH` (if set)
+  - `./config.json` (current working directory)
+  - `mcp-agent-os/config.json` (next to this README)
+
+Start by copying:
+
+```bash
+cp config.example.json config.json
+```
+
 ## Chatbot (local Ollama)
 
 This client can run as a chatbot backed by a local model via Ollama.
@@ -41,6 +56,8 @@ Or run the launcher (starts `ollama serve` in the background if needed, then run
 
 Environment variables:
 
+- If `config.json` is present, these are ignored (use `config.json`).
+- If `config.json` is not present, these act as overrides/fallbacks.
 - `OLLAMA_HOST`: default `http://127.0.0.1:11434`
 - `OLLAMA_MODEL`: default `llama3`
 - `OLLAMA_TIMEOUT_MS`: default `120000`

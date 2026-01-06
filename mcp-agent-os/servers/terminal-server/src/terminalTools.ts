@@ -102,7 +102,10 @@ export function resolveSandboxPath(ctx: TerminalContext, userPath: string): stri
 
   const rel = path.relative(ctx.sandboxRootAbs, abs);
   if (rel.startsWith('..') || path.isAbsolute(rel)) {
-    throw new Error(`Path is outside sandboxRoot: ${userPath}`);
+    throw new Error(
+      `Path is outside sandboxRoot (${ctx.sandboxRootAbs}): ${userPath}. ` +
+        `Try a relative path like "Downloads" or an absolute path under the sandbox root.`
+    );
   }
   return abs;
 }
@@ -335,7 +338,7 @@ export async function toolGenerateSshKey(
 ): Promise<{ text: string; requiresConfirmation?: { token: string; reason: string; expiresAt: string } }> {
   const keyType = params.type ?? 'ed25519';
   const filename = ensureSafeSshKeyFileName(params.filename ?? 'id_ed25519');
-  const comment = params.comment ?? 'smartos-mcp';
+  const comment = params.comment ?? 'laya-mcp';
   const passphrase = params.passphrase ?? '';
   const overwrite = params.overwrite ?? false;
 
@@ -519,6 +522,103 @@ export async function toolSearch(
   await walk(root);
   await appendAudit(ctx, { event: 'search', query, maxMatches, found: matches.length });
   return { text: matches.length ? matches.map(m => `- ${m}`).join('\n') : '(no matches)' };
+}
+
+export async function toolFindFiles(
+  ctx: TerminalContext,
+  params: {
+    dir: string;
+    extensions?: string[];
+    nameContains?: string;
+    maxResults?: number;
+    modifiedWithinMinutes?: number;
+    followSymlinks?: boolean;
+  }
+): Promise<{ text: string }> {
+  const dirAbs = resolveSandboxPath(ctx, params.dir);
+  const maxResults = params.maxResults ?? 50;
+  const followSymlinks = params.followSymlinks ?? true;
+  const needle = (params.nameContains ?? '').toLowerCase();
+  const exts = (params.extensions ?? []).map(e => (e.startsWith('.') ? e.toLowerCase() : `.${e.toLowerCase()}`));
+  const modifiedWithinMs =
+    params.modifiedWithinMinutes !== undefined ? params.modifiedWithinMinutes * 60 * 1000 : undefined;
+
+  const results: { path: string; mtimeMs: number }[] = [];
+  const visited = new Set<string>();
+
+  async function walk(dir: string) {
+    if (results.length >= maxResults) return;
+    let entries: import('node:fs').Dirent[];
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (results.length >= maxResults) return;
+      const p = path.join(dir, e.name);
+
+      if (e.isDirectory()) {
+        await walk(p);
+        continue;
+      }
+
+      if (e.isSymbolicLink() && followSymlinks) {
+        // If symlink points to a directory, traverse it.
+        try {
+          const st = await fs.stat(p);
+          if (st.isDirectory()) {
+            const real = await fs.realpath(p).catch(() => p);
+            if (visited.has(real)) continue;
+            visited.add(real);
+            await walk(p);
+            continue;
+          }
+        } catch {
+          // ignore broken symlink
+        }
+      }
+
+      if (!e.isFile()) continue;
+
+      let st: import('node:fs').Stats;
+      try {
+        st = await fs.stat(p);
+      } catch {
+        continue;
+      }
+
+      if (modifiedWithinMs !== undefined) {
+        if (Date.now() - st.mtimeMs > modifiedWithinMs) continue;
+      }
+
+      const lowerName = e.name.toLowerCase();
+      if (needle && !lowerName.includes(needle)) continue;
+      if (exts.length) {
+        const ok = exts.some(ext => lowerName.endsWith(ext));
+        if (!ok) continue;
+      }
+
+      results.push({ path: p, mtimeMs: st.mtimeMs });
+    }
+  }
+
+  visited.add(await fs.realpath(dirAbs).catch(() => dirAbs));
+  await walk(dirAbs);
+
+  results.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const out = results.length ? results.map(r => `- ${r.path}`).join('\n') : '(no matches)';
+  await appendAudit(ctx, {
+    event: 'find_files',
+    dir: dirAbs,
+    extensions: exts,
+    nameContains: needle,
+    maxResults,
+    modifiedWithinMinutes: params.modifiedWithinMinutes ?? null,
+    followSymlinks,
+    found: results.length
+  });
+  return { text: out };
 }
 
 

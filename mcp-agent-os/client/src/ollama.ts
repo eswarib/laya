@@ -11,6 +11,7 @@ export type OllamaChatOptions = {
   messages: OllamaMessage[];
   temperature?: number;
   numPredict?: number;
+  timeoutMs?: number;
 };
 
 function joinUrl(host: string, path: string): string {
@@ -19,8 +20,7 @@ function joinUrl(host: string, path: string): string {
   return `${h}${p}`;
 }
 
-async function postJson(url: string, body: unknown): Promise<any> {
-  const timeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS ?? '120000') || 120000;
+async function postJson(url: string, body: unknown, timeoutMs: number): Promise<any> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const resp = await fetch(url, {
@@ -51,6 +51,31 @@ function messagesToPrompt(messages: OllamaMessage[]): string {
   }
   out.push('Assistant:');
   return out.join('\n\n');
+}
+
+function buildOllamaBaseBody(opts: OllamaChatOptions) {
+  return {
+    model: opts.model,
+    stream: false,
+    options: {
+      temperature: opts.temperature,
+      num_predict: opts.numPredict
+    }
+  };
+}
+
+function buildOllamaChatBody(opts: OllamaChatOptions) {
+  return {
+    ...buildOllamaBaseBody(opts),
+    messages: opts.messages
+  };
+}
+
+function buildOllamaGenerateBody(opts: OllamaChatOptions) {
+  return {
+    ...buildOllamaBaseBody(opts),
+    prompt: messagesToPrompt(opts.messages)
+  };
 }
 
 function parseOllamaJsonOrNdjson(text: string): any {
@@ -102,34 +127,28 @@ function parseOllamaJsonOrNdjson(text: string): any {
 export async function ollamaChat(opts: OllamaChatOptions): Promise<string> {
   const host = opts.host || 'http://127.0.0.1:11434';
   const model = opts.model || 'llama3';
+  const timeoutMs = opts.timeoutMs ?? (Number(process.env.OLLAMA_TIMEOUT_MS ?? '120000') || 120000);
+  const normalizedOpts: OllamaChatOptions = { ...opts, host, model };
 
   // 1) Try /api/chat
   try {
     const url = joinUrl(host, '/api/chat');
-    const data = await postJson(url, {
-      model,
-      messages: opts.messages,
-      stream: false,
-      options: {
-        temperature: opts.temperature,
-        num_predict: opts.numPredict
-      }
-    });
+    const data = await postJson(
+      url,
+      buildOllamaChatBody(normalizedOpts),
+      timeoutMs
+    );
     const content = data?.message?.content;
     if (typeof content !== 'string') throw new Error('Unexpected /api/chat response shape');
     return content;
   } catch (e) {
     // 2) Fallback /api/generate (older or minimal installs)
     const url = joinUrl(host, '/api/generate');
-    const data = await postJson(url, {
-      model,
-      prompt: messagesToPrompt(opts.messages),
-      stream: false,
-      options: {
-        temperature: opts.temperature,
-        num_predict: opts.numPredict
-      }
-    });
+    const data = await postJson(
+      url,
+      buildOllamaGenerateBody(normalizedOpts),
+      timeoutMs
+    );
     const content = data?.response;
     if (typeof content !== 'string') {
       throw e instanceof Error ? e : new Error(String(e));

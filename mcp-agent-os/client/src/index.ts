@@ -5,6 +5,7 @@ import readline from 'node:readline';
 import type { McpJson } from './client.js';
 import { connectAllServers } from './client.js';
 import { createChatbot } from './chatbot.js';
+import { readLayaConfig } from './config.js';
 import { routeLine } from './router.js';
 
 function printHelp() {
@@ -74,7 +75,13 @@ async function readMcpJson(mcpPath: string): Promise<McpJson> {
 }
 
 async function main() {
-  const mcpPath = await findMcpJsonPath();
+  const { config, path: configPath } = await readLayaConfig();
+
+  const mcpPath = config.mcpJsonPath
+    ? path.resolve(config.mcpJsonPath)
+    : config.layaRoot
+      ? path.join(path.resolve(config.layaRoot), 'mcp.json')
+      : await findMcpJsonPath();
   const mcp = await readMcpJson(mcpPath);
   const mcpDir = path.dirname(mcpPath);
 
@@ -85,15 +92,20 @@ async function main() {
     console.log(`- ${s.name}: ${s.tools.length} tools`);
   }
 
-  const ollamaHost = process.env.OLLAMA_HOST ?? 'http://127.0.0.1:11434';
-  const ollamaModel = process.env.OLLAMA_MODEL ?? 'llama3';
+  const useEnvFallbacks = !configPath;
+  const ollamaHost = config.ollamaHost ?? (useEnvFallbacks ? process.env.OLLAMA_HOST : undefined) ?? 'http://127.0.0.1:11434';
+  const ollamaModel = config.ollamaModel ?? (useEnvFallbacks ? process.env.OLLAMA_MODEL : undefined) ?? 'llama3';
+  const ollamaTimeoutMs =
+    config.ollamaTimeoutMs ?? (useEnvFallbacks ? (Number(process.env.OLLAMA_TIMEOUT_MS ?? '120000') || 120000) : 120000);
   console.log(`Ollama: ${ollamaHost} (model: ${ollamaModel})`);
   await checkOllama(ollamaHost);
 
   const bot = createChatbot(servers, {
     ollamaHost,
     ollamaModel,
-    maxToolStepsPerUserTurn: Number(process.env.MAX_TOOL_STEPS ?? '10') || 10
+    ollamaTimeoutMs,
+    maxToolStepsPerUserTurn:
+      config.maxToolSteps ?? (useEnvFallbacks ? (Number(process.env.MAX_TOOL_STEPS ?? '10') || 10) : 10)
   });
 
   printHelp();
