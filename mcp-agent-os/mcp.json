@@ -1,0 +1,21 @@
+{
+  "servers": {
+    "terminal-server": {
+      "command": "./node_modules/.bin/tsx",
+      "args": ["servers/terminal-server/src/index.ts"],
+      "cwd": "."
+    },
+    "browser-server": {
+      "command": "./node_modules/.bin/tsx",
+      "args": ["servers/browser-server/src/index.ts"],
+      "cwd": "."
+    },
+    "ide-server": {
+      "command": "./node_modules/.bin/tsx",
+      "args": ["servers/ide-server/src/index.ts"],
+      "cwd": "."
+    }
+  }
+}
+
+
