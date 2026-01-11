@@ -26,8 +26,14 @@ This client can run as a chatbot backed by a local model via Ollama.
 ollama serve
 ollama pull llama3.2:3b
 ```
+2) intall
 
-2) Run the client:
+```bash
+cd mcp-agent-os
+npm install
+```
+   
+3) Run the client:
 
 ```bash
 cd mcp-agent-os
