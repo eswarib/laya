@@ -1,5 +1,5 @@
 {
-  "sandboxRoot": "/home/eswari",
+  "sandboxRoot": "~",
   "auditLogPath": ".mcp-audit/terminal-server.jsonl",
   "allowedCommands": [
     "ls",

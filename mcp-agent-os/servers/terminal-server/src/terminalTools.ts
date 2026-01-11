@@ -71,6 +71,13 @@ export async function loadTerminalPolicy(policyPath: string): Promise<TerminalPo
   };
 }
 
+function expandHome(p: string): string {
+  if (p === '~' || p.startsWith('~/')) {
+    return path.join(os.homedir(), p.slice(1));
+  }
+  return p;
+}
+
 export async function createTerminalContext(opts?: { policyPath?: string }): Promise<TerminalContext> {
   const policyPath =
     opts?.policyPath ??
@@ -79,7 +86,9 @@ export async function createTerminalContext(opts?: { policyPath?: string }): Pro
 
   const policy = await loadTerminalPolicy(policyPath);
 
-  const sandboxRootAbs = path.resolve(process.cwd(), policy.sandboxRoot);
+  // Priority: SANDBOX_ROOT env var > policy.sandboxRoot (with ~ expansion)
+  const rawRoot = process.env.SANDBOX_ROOT ?? policy.sandboxRoot;
+  const sandboxRootAbs = path.resolve(process.cwd(), expandHome(rawRoot));
   const auditLogAbs = path.isAbsolute(policy.auditLogPath)
     ? policy.auditLogPath
     : path.resolve(sandboxRootAbs, policy.auditLogPath);
