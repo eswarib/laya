@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+yarn.lock
+pnpm-lock.yaml
+.mcp-audit
+dist
+coverage
+.git
+.DS_Store
+config/config.json
+
+

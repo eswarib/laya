@@ -75,7 +75,7 @@ async function readMcpJson(mcpPath: string): Promise<McpJson> {
 }
 
 async function main() {
-  const { config, path: configPath } = await readLayaConfig();
+  const { config } = await readLayaConfig();
 
   const mcpPath = config.mcpJsonPath
     ? path.resolve(config.mcpJsonPath)
@@ -92,11 +92,9 @@ async function main() {
     console.log(`- ${s.name}: ${s.tools.length} tools`);
   }
 
-  const useEnvFallbacks = !configPath;
-  const ollamaHost = config.ollamaHost ?? (useEnvFallbacks ? process.env.OLLAMA_HOST : undefined) ?? 'http://127.0.0.1:11434';
-  const ollamaModel = config.ollamaModel ?? (useEnvFallbacks ? process.env.OLLAMA_MODEL : undefined) ?? 'llama3';
-  const ollamaTimeoutMs =
-    config.ollamaTimeoutMs ?? (useEnvFallbacks ? (Number(process.env.OLLAMA_TIMEOUT_MS ?? '120000') || 120000) : 120000);
+  const ollamaHost = config.ollamaHost ?? 'http://127.0.0.1:11434';
+  const ollamaModel = config.ollamaModel ?? 'llama3';
+  const ollamaTimeoutMs = config.ollamaTimeoutMs ?? 120000;
   console.log(`Ollama: ${ollamaHost} (model: ${ollamaModel})`);
   await checkOllama(ollamaHost);
 
@@ -104,8 +102,7 @@ async function main() {
     ollamaHost,
     ollamaModel,
     ollamaTimeoutMs,
-    maxToolStepsPerUserTurn:
-      config.maxToolSteps ?? (useEnvFallbacks ? (Number(process.env.MAX_TOOL_STEPS ?? '10') || 10) : 10)
+    maxToolStepsPerUserTurn: config.maxToolSteps ?? 10
   });
 
   printHelp();

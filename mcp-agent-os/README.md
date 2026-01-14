@@ -17,17 +17,19 @@ From `mcp-agent-os/`:
 
 ## Configuration (config.json)
 
-You can configure Laya via `config.json` (recommended) instead of environment variables.
+You can configure Laya via `config/config.json` (recommended) instead of environment variables.
 
 - Lookup order:
   - `LAYA_CONFIG_PATH` (if set)
-  - `./config.json` (current working directory)
-  - `mcp-agent-os/config.json` (next to this README)
+  - `./config/config.json` (current working directory)
+  - `mcp-agent-os/config/config.json` (next to this README)
+  
+`config/config.json` is **required**. If it is missing, Laya will exit with an error.
 
 Start by copying:
 
 ```bash
-cp config.example.json config.json
+cp config/examples/config.example.json config/config.json
 ```
 
 ## Chatbot (local Ollama)
@@ -56,17 +58,46 @@ Or run the launcher (starts `ollama serve` in the background if needed, then run
 
 Environment variables:
 
-- If `config.json` is present, these are ignored (use `config.json`).
-- If `config.json` is not present, these act as overrides/fallbacks.
-- `OLLAMA_HOST`: default `http://127.0.0.1:11434`
-- `OLLAMA_MODEL`: default `llama3`
-- `OLLAMA_TIMEOUT_MS`: default `120000`
-- `MAX_TOOL_STEPS`: default `10`
+- `LAYA_CONFIG_PATH`: optional path to config JSON (use this if you don’t want to keep `config/config.json` in the repo).
 
 ## Notes
 
 - Server configs live in `mcp.json`.
 - Terminal security policy lives in `servers/terminal-server/terminal-policy.json` (override via `TERMINAL_POLICY_PATH`).
+
+## Docker
+
+Build (from `mcp-agent-os/`):
+
+```bash
+docker build -t laya-mcp-agent-os .
+```
+
+Run with a writable sandbox mounted at `/workspace`:
+
+```bash
+docker run --rm -it -v "$PWD:/workspace" laya-mcp-agent-os
+```
+
+If your Ollama is running on the host, you usually want to set `OLLAMA_HOST`:
+
+- macOS/Windows Docker Desktop:
+  - use `http://host.docker.internal:11434`
+- Linux:
+  - run with `--add-host host.docker.internal:host-gateway` and use `http://host.docker.internal:11434`
+
+Example:
+
+```bash
+docker run --rm -it \
+  -v "$PWD:/workspace" \
+  --add-host host.docker.internal:host-gateway \
+  -e OLLAMA_HOST="http://host.docker.internal:11434" \
+  laya-mcp-agent-os
+```
+
+The Docker image uses a container-friendly terminal policy by default:
+`servers/terminal-server/terminal-policy.docker.json` (sandboxRoot=`/workspace`).
 
 
 

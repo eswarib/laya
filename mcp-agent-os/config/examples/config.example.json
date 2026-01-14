@@ -1,5 +1,5 @@
 {
-  "//": "Copy to config.json. JSON does not support comments; this key is ignored by laya.",
+  "//": "Copy to config/config.json. JSON does not support comments; this key is ignored by laya.",
   "layaRoot": ".",
   "mcpJsonPath": null,
   "ollamaHost": "http://127.0.0.1:11434",

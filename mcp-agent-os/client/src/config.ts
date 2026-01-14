@@ -76,11 +76,11 @@ function normalizeConfig(raw: unknown, configPathAbs: string): LayaConfig {
 }
 
 /**
- * Finds config.json.
+ * Finds config.
  *
  * Precedence:
  * - LAYA_CONFIG_PATH (must exist if set)
- * - nearest config.json walking up from process.cwd()
+ * - nearest config/config.json walking up from process.cwd()
  */
 export async function findConfigPath(): Promise<string | null> {
   const explicit = process.env.LAYA_CONFIG_PATH;
@@ -92,8 +92,8 @@ export async function findConfigPath(): Promise<string | null> {
 
   let dir = process.cwd();
   for (let i = 0; i < 8; i++) {
-    const candidate = path.join(dir, 'config.json');
-    if (await fileExists(candidate)) return candidate;
+    const candidateNew = path.join(dir, 'config', 'config.json');
+    if (await fileExists(candidateNew)) return candidateNew;
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
@@ -103,7 +103,11 @@ export async function findConfigPath(): Promise<string | null> {
 
 export async function readLayaConfig(): Promise<{ config: LayaConfig; path: string | null }> {
   const p = await findConfigPath();
-  if (!p) return { config: {}, path: null };
+  if (!p) {
+    throw new Error(
+      'Missing config/config.json. Create it (copy from config/examples/config.example.json) or set LAYA_CONFIG_PATH.'
+    );
+  }
   const raw = await fs.readFile(p, 'utf-8');
   const parsed = JSON.parse(raw) as unknown;
   return { config: normalizeConfig(parsed, p), path: p };

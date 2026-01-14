@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -29,6 +29,16 @@ async function waitForOllama(host, timeoutMs) {
 }
 
 function spawnOllamaServe() {
+  // Fast-fail with a clear message if `ollama` isn't installed/available on PATH.
+  const probe = spawnSync('ollama', ['--version'], { stdio: 'ignore' });
+  if (probe.error && probe.error.code === 'ENOENT') {
+    process.stderr.write(
+      `laya: Ollama executable not found ("ollama").\n` +
+        `Install Ollama, or point laya at an already-running Ollama via OLLAMA_HOST/config.json.\n`
+    );
+    return null;
+  }
+
   // Detached so it can keep running in the background.
   const child = spawn('ollama', ['serve'], {
     stdio: ['ignore', 'ignore', 'ignore'],
@@ -50,8 +60,8 @@ function tryReadJson(absPath) {
 
 function resolveConfig({ scriptRoot }) {
   const explicit = process.env.LAYA_CONFIG_PATH ? path.resolve(process.env.LAYA_CONFIG_PATH) : null;
-  const cwdCandidate = path.resolve(process.cwd(), 'config.json');
-  const rootCandidate = path.resolve(scriptRoot, 'config.json');
+  const cwdCandidateNew = path.resolve(process.cwd(), 'config', 'config.json');
+  const rootCandidateNew = path.resolve(scriptRoot, 'config', 'config.json');
 
   let configPath = null;
   if (explicit) {
@@ -59,13 +69,17 @@ function resolveConfig({ scriptRoot }) {
       throw new Error(`LAYA_CONFIG_PATH does not exist: ${explicit}`);
     }
     configPath = explicit;
-  } else if (fs.existsSync(cwdCandidate)) {
-    configPath = cwdCandidate;
-  } else if (fs.existsSync(rootCandidate)) {
-    configPath = rootCandidate;
+  } else if (fs.existsSync(cwdCandidateNew)) {
+    configPath = cwdCandidateNew;
+  } else if (fs.existsSync(rootCandidateNew)) {
+    configPath = rootCandidateNew;
   }
 
-  if (!configPath) return { configPath: null, config: {} };
+  if (!configPath) {
+    throw new Error(
+      'Missing config/config.json. Create it (copy from config/examples/config.example.json) or set LAYA_CONFIG_PATH.'
+    );
+  }
 
   const parsed = tryReadJson(configPath);
   if (parsed === null) {
@@ -122,18 +136,17 @@ function spawnClient({ cwd, env }) {
 
 async function main() {
   const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const { config, configPath } = resolveConfig({ scriptRoot });
+  const { config } = resolveConfig({ scriptRoot });
 
   const cwd =
     config.layaRoot ??
-    (!configPath && process.env.LAYA_ROOT ? path.resolve(process.env.LAYA_ROOT) : scriptRoot);
+    scriptRoot;
 
-  const useEnvFallbacks = !configPath;
-  const host = config.ollamaHost ?? (useEnvFallbacks ? process.env.OLLAMA_HOST : undefined) ?? 'http://127.0.0.1:11434';
-  const model = config.ollamaModel ?? (useEnvFallbacks ? process.env.OLLAMA_MODEL : undefined) ?? 'qwen2.5:1.5b';
+  const host = config.ollamaHost ?? 'http://127.0.0.1:11434';
+  const model = config.ollamaModel ?? 'qwen2.5:1.5b';
   const startupTimeoutMs =
     config.ollamaStartupTimeoutMs ??
-    (useEnvFallbacks ? (Number(process.env.LAYA_OLLAMA_STARTUP_TIMEOUT_MS ?? '15000') || 15000) : 15000);
+    15000;
 
   let startedPid = null;
   if (!(await isOllamaUp(host))) {
@@ -156,15 +169,15 @@ async function main() {
       OLLAMA_HOST: host,
       OLLAMA_MODEL: model,
       OLLAMA_TIMEOUT_MS: String(
-        config.ollamaTimeoutMs ?? (useEnvFallbacks ? (Number(process.env.OLLAMA_TIMEOUT_MS ?? '120000') || 120000) : 120000)
+        config.ollamaTimeoutMs ?? 120000
       ),
-      MAX_TOOL_STEPS: String(config.maxToolSteps ?? (useEnvFallbacks ? (Number(process.env.MAX_TOOL_STEPS ?? '10') || 10) : 10))
+      MAX_TOOL_STEPS: String(config.maxToolSteps ?? 10)
     }
   });
 
   child.on('exit', (code, signal) => {
     // Optional: stop Ollama if we started it.
-    const killOnExit = config.killOllamaOnExit ?? (useEnvFallbacks ? process.env.LAYA_KILL_OLLAMA_ON_EXIT === '1' : false);
+    const killOnExit = config.killOllamaOnExit ?? false;
     if (startedPid && killOnExit) {
       try {
         process.kill(startedPid, 'SIGTERM');

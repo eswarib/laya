@@ -1,9 +1,9 @@
 {
-  "//": "Copy to config.json. JSON does not support comments; this key is ignored by laya.",
+  "//": "Copy to config/config.json. JSON does not support comments; this key is ignored by laya.",
   "layaRoot": ".",
   "mcpJsonPath": null,
   "ollamaHost": "http://127.0.0.1:11434",
-  "ollamaModel": "llama3.2:3b",
+  "ollamaModel": "qwen2.5:1.5b",
   "ollamaTimeoutMs": 120000,
   "ollamaStartupTimeoutMs": 15000,
   "maxToolSteps": 10,
